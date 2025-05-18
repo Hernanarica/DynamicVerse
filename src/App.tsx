@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from './lib/supabase'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import './App.css'
 
 interface Titulo {
@@ -16,6 +17,24 @@ interface Versiculo {
   created_at: string
 }
 
+interface Payload {
+  new: {
+    id: string
+    titulo_id: string
+    texto: string
+    active: boolean
+    created_at: string
+  }
+  old: {
+    id: string
+    titulo_id: string
+    texto: string
+    active: boolean
+    created_at: string
+  }
+  eventType: 'INSERT' | 'UPDATE' | 'DELETE'
+}
+
 function App() {
   const [titulos, setTitulos] = useState<Titulo[]>([])
   const [versiculos, setVersiculos] = useState<Versiculo[]>([])
@@ -24,9 +43,10 @@ function App() {
   const [indiceActual, setIndiceActual] = useState<number>(0)
   const [ultimaActualizacion, setUltimaActualizacion] = useState<Date>(new Date())
   const [estaSincronizado, setEstaSincronizado] = useState<boolean>(true)
+  const channelRef = useRef<RealtimeChannel | null>(null)
 
   // Función para recargar versículos
-  const recargarVersiculos = async () => {
+  const recargarVersiculos = useCallback(async () => {
     if (!tituloActual) return
 
     console.log('Recargando versículos para título:', tituloActual)
@@ -64,10 +84,10 @@ function App() {
 
     setEstaSincronizado(true)
     setUltimaActualizacion(new Date())
-  }
+  }, [tituloActual])
 
+  // Efecto para cargar títulos
   useEffect(() => {
-    // Cargar títulos
     const cargarTitulos = async () => {
       const { data, error } = await supabase
         .from('Titulos')
@@ -83,56 +103,84 @@ function App() {
     }
 
     cargarTitulos()
-
-    // Suscribirse a cambios en versículos
-    const subscription = supabase
-      .channel('versiculos_changes')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'versiculos' 
-        }, 
-        async (payload) => {
-          console.log('Cambio recibido:', payload)
-          setEstaSincronizado(false)
-          
-          // Recargar todos los versículos para asegurar sincronización
-          await recargarVersiculos()
-          
-          setEstaSincronizado(true)
-          setUltimaActualizacion(new Date())
-        }
-      )
-      .subscribe()
-
-    return () => {
-      subscription.unsubscribe()
-    }
   }, [])
 
+  // Efecto para manejar la suscripción
+  useEffect(() => {
+    // Limpiar suscripción anterior si existe
+    if (channelRef.current) {
+      console.log('Desuscribiendo del canal anterior')
+      channelRef.current.unsubscribe()
+      channelRef.current = null
+    }
+
+    // Crear nueva suscripción
+    console.log('Configurando nueva suscripción')
+    channelRef.current = supabase
+      .channel('versiculos_changes')
+      .on(
+        'postgres_changes' as any,
+        {
+          event: '*',
+          schema: 'public',
+          table: 'versiculos'
+        },
+        async (payload: Payload) => {
+          console.log('Cambio recibido:', payload)
+          if (tituloActual && payload.new.titulo_id === tituloActual.id) {
+            console.log('Cambio relevante detectado, recargando versículos')
+            setEstaSincronizado(false)
+            await recargarVersiculos()
+            setEstaSincronizado(true)
+            setUltimaActualizacion(new Date())
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Estado de la suscripción:', status)
+      })
+
+    return () => {
+      if (channelRef.current) {
+        console.log('Desuscribiendo del canal')
+        channelRef.current.unsubscribe()
+        channelRef.current = null
+      }
+    }
+  }, [tituloActual, recargarVersiculos])
+
+  // Efecto para recargar versículos cuando cambia el título
   useEffect(() => {
     recargarVersiculos()
-  }, [tituloActual])
+  }, [recargarVersiculos])
 
   const activarVersiculo = async (versiculo: Versiculo) => {
     setEstaSincronizado(false)
     
-    // Desactivar todos los versículos
-    await supabase
-      .from('versiculos')
-      .update({ active: false })
-      .eq('titulo_id', tituloActual?.id)
+    try {
+      // Desactivar todos los versículos
+      const { error: errorDesactivar } = await supabase
+        .from('versiculos')
+        .update({ active: false })
+        .eq('titulo_id', tituloActual?.id)
 
-    // Activar el versículo seleccionado
-    await supabase
-      .from('versiculos')
-      .update({ active: true })
-      .eq('id', versiculo.id)
+      if (errorDesactivar) throw errorDesactivar
 
-    setVersiculoActual(versiculo)
-    setEstaSincronizado(true)
-    setUltimaActualizacion(new Date())
+      // Activar el versículo seleccionado
+      const { error: errorActivar } = await supabase
+        .from('versiculos')
+        .update({ active: true })
+        .eq('id', versiculo.id)
+
+      if (errorActivar) throw errorActivar
+
+      setVersiculoActual(versiculo)
+      setEstaSincronizado(true)
+      setUltimaActualizacion(new Date())
+    } catch (error) {
+      console.error('Error al activar versículo:', error)
+      setEstaSincronizado(true)
+    }
   }
 
   const cambiarVersiculo = async (direccion: 'siguiente' | 'anterior') => {
