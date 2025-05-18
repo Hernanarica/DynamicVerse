@@ -12,17 +12,19 @@ const Dictaphone = ({ onCambiarVersiculo }: DictaphoneProps) => {
   const commands = [
     {
       command: ['siguiente', 'próximo', 'avanzar'],
-      callback: () => {
-        console.log('Comando reconocido: siguiente');
+      callback: (command: string) => {
+        console.log('Comando reconocido:', command);
         onCambiarVersiculo('siguiente');
-      }
+      },
+      matchInterim: true
     },
     {
       command: ['anterior', 'atrás', 'retroceder'],
-      callback: () => {
-        console.log('Comando reconocido: anterior');
+      callback: (command: string) => {
+        console.log('Comando reconocido:', command);
         onCambiarVersiculo('anterior');
-      }
+      },
+      matchInterim: true
     }
   ];
 
@@ -32,34 +34,40 @@ const Dictaphone = ({ onCambiarVersiculo }: DictaphoneProps) => {
     resetTranscript,
     browserSupportsSpeechRecognition,
     isMicrophoneAvailable
-  } = useSpeechRecognition({ commands });
+  } = useSpeechRecognition({ 
+    commands
+  });
 
   useEffect(() => {
-    // Detectar si es dispositivo móvil
     setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
   }, []);
 
   const startListening = async () => {
     try {
-      // Solicitar permisos explícitamente en móviles
       if (isMobile) {
         const permission = await navigator.mediaDevices.getUserMedia({ audio: true });
         if (permission) {
           SpeechRecognition.startListening({ 
             continuous: true,
-            language: 'es-ES'
+            language: 'es-AR'
           });
         }
       } else {
         SpeechRecognition.startListening({ 
           continuous: true,
-          language: 'es-ES'
+          language: 'es-AR'
         });
       }
+      console.log('Iniciando reconocimiento de voz...');
     } catch (error) {
       console.error('Error al iniciar el reconocimiento:', error);
       setPermissionError('No se pudo acceder al micrófono. Por favor, verifica los permisos.');
     }
+  };
+
+  const stopListening = () => {
+    console.log('Deteniendo reconocimiento de voz...');
+    SpeechRecognition.stopListening();
   };
 
   if (!browserSupportsSpeechRecognition) {
@@ -92,7 +100,7 @@ const Dictaphone = ({ onCambiarVersiculo }: DictaphoneProps) => {
         </button>
         <button
           type="button"
-          onClick={SpeechRecognition.stopListening}
+          onClick={stopListening}
           className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
           disabled={!listening}
         >
