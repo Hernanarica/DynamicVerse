@@ -25,6 +25,47 @@ function App() {
   const [ultimaActualizacion, setUltimaActualizacion] = useState<Date>(new Date())
   const [estaSincronizado, setEstaSincronizado] = useState<boolean>(true)
 
+  // Función para recargar versículos
+  const recargarVersiculos = async () => {
+    if (!tituloActual) return
+
+    console.log('Recargando versículos para título:', tituloActual)
+    setEstaSincronizado(false)
+
+    const { data, error } = await supabase
+      .from('versiculos')
+      .select(`
+        *,
+        Titulos (
+          nombre
+        )
+      `)
+      .eq('titulo_id', tituloActual.id)
+      .order('created_at', { ascending: true })
+    
+    if (error) {
+      console.error('Error al cargar versículos:', error)
+      return
+    }
+
+    const versiculosConTitulo = data?.map(v => ({
+      ...v,
+      titulo: v.Titulos?.nombre || ''
+    })) || []
+    
+    setVersiculos(versiculosConTitulo)
+    
+    const versiculoActivo = versiculosConTitulo.find(v => v.active)
+    if (versiculoActivo) {
+      const indiceActivo = versiculosConTitulo.findIndex(v => v.id === versiculoActivo.id)
+      setIndiceActual(indiceActivo)
+      setVersiculoActual(versiculoActivo)
+    }
+
+    setEstaSincronizado(true)
+    setUltimaActualizacion(new Date())
+  }
+
   useEffect(() => {
     // Cargar títulos
     const cargarTitulos = async () => {
@@ -52,32 +93,15 @@ function App() {
           schema: 'public', 
           table: 'versiculos' 
         }, 
-        (payload) => {
+        async (payload) => {
           console.log('Cambio recibido:', payload)
           setEstaSincronizado(false)
           
-          // Actualizar el estado local con los cambios
-          if (payload.eventType === 'UPDATE') {
-            setVersiculos(prev => {
-              const nuevosVersiculos = prev.map(v => 
-                v.id === payload.new.id ? (payload.new as Versiculo) : v
-              )
-              
-              // Si el cambio fue en el versículo activo, actualizar el estado
-              if (payload.new.active) {
-                const nuevoIndice = nuevosVersiculos.findIndex(v => v.id === payload.new.id)
-                if (nuevoIndice !== -1) {
-                  setIndiceActual(nuevoIndice)
-                  setVersiculoActual(payload.new as Versiculo)
-                }
-              }
-              
-              return nuevosVersiculos
-            })
-          }
+          // Recargar todos los versículos para asegurar sincronización
+          await recargarVersiculos()
           
-          setUltimaActualizacion(new Date())
           setEstaSincronizado(true)
+          setUltimaActualizacion(new Date())
         }
       )
       .subscribe()
@@ -88,58 +112,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    // Cargar versículos cuando cambia el título actual
-    const cargarVersiculos = async () => {
-      if (!tituloActual) return
-
-      console.log('Cargando versículos para título:', tituloActual)
-      setEstaSincronizado(false)
-
-      const { data, error } = await supabase
-        .from('versiculos')
-        .select(`
-          *,
-          Titulos (
-            nombre
-          )
-        `)
-        .eq('titulo_id', tituloActual.id)
-        .order('created_at', { ascending: true })
-      
-      if (error) {
-        console.error('Error al cargar versículos:', error)
-        return
-      }
-      
-      console.log('Versículos cargados:', data)
-
-      // Transformar los datos para incluir el título directamente
-      const versiculosConTitulo = data?.map(v => ({
-        ...v,
-        titulo: v.Titulos?.nombre || ''
-      })) || []
-      
-      console.log('Versículos transformados:', versiculosConTitulo)
-      
-      setVersiculos(versiculosConTitulo)
-      
-      // Buscar el versículo activo
-      const versiculoActivo = versiculosConTitulo.find(v => v.active)
-      if (versiculoActivo) {
-        const indiceActivo = versiculosConTitulo.findIndex(v => v.id === versiculoActivo.id)
-        setIndiceActual(indiceActivo)
-        setVersiculoActual(versiculoActivo)
-      } else if (versiculosConTitulo.length > 0) {
-        // Si no hay versículo activo, activar el primero
-        setIndiceActual(0)
-        await activarVersiculo(versiculosConTitulo[0])
-      }
-
-      setEstaSincronizado(true)
-      setUltimaActualizacion(new Date())
-    }
-
-    cargarVersiculos()
+    recargarVersiculos()
   }, [tituloActual])
 
   const activarVersiculo = async (versiculo: Versiculo) => {
