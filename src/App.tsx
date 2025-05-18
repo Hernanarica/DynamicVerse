@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from './lib/supabase'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import './App.css'
+import Dictaphone from './components/Dictaphone'
 
 interface Titulo {
   id: string
@@ -232,6 +233,7 @@ function App() {
                       </button>
                     ))}
                   </div>
+                  <Dictaphone />
                 </div>
 
                 {/* Contenido del versículo actual */}
