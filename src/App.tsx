@@ -233,7 +233,7 @@ function App() {
                       </button>
                     ))}
                   </div>
-                  <Dictaphone />
+                  <Dictaphone onCambiarVersiculo={cambiarVersiculo} />
                 </div>
 
                 {/* Contenido del versículo actual */}

@@ -1,9 +1,30 @@
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 import { useState, useEffect } from 'react';
 
-const Dictaphone = () => {
+interface DictaphoneProps {
+  onCambiarVersiculo: (direccion: 'siguiente' | 'anterior') => void;
+}
+
+const Dictaphone = ({ onCambiarVersiculo }: DictaphoneProps) => {
   const [isMobile, setIsMobile] = useState(false);
   const [permissionError, setPermissionError] = useState<string>('');
+
+  const commands = [
+    {
+      command: ['siguiente', 'próximo', 'avanzar'],
+      callback: () => {
+        console.log('Comando reconocido: siguiente');
+        onCambiarVersiculo('siguiente');
+      }
+    },
+    {
+      command: ['anterior', 'atrás', 'retroceder'],
+      callback: () => {
+        console.log('Comando reconocido: anterior');
+        onCambiarVersiculo('anterior');
+      }
+    }
+  ];
 
   const {
     transcript,
@@ -11,7 +32,7 @@ const Dictaphone = () => {
     resetTranscript,
     browserSupportsSpeechRecognition,
     isMicrophoneAvailable
-  } = useSpeechRecognition();
+  } = useSpeechRecognition({ commands });
 
   useEffect(() => {
     // Detectar si es dispositivo móvil
@@ -91,6 +112,13 @@ const Dictaphone = () => {
           <p className="text-gray-700">{transcript}</p>
         </div>
       )}
+      <div className="mt-2 text-sm text-gray-600">
+        <p>Comandos de voz disponibles:</p>
+        <ul className="list-disc list-inside">
+          <li>"siguiente", "próximo" o "avanzar" - Para ir al siguiente versículo</li>
+          <li>"anterior", "atrás" o "retroceder" - Para ir al versículo anterior</li>
+        </ul>
+      </div>
     </div>
   );
 };
