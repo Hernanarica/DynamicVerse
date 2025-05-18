@@ -1,5 +1,5 @@
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 
 interface DictaphoneProps {
   onCambiarVersiculo: (direccion: 'siguiente' | 'anterior') => void;
@@ -8,30 +8,38 @@ interface DictaphoneProps {
 const Dictaphone = ({ onCambiarVersiculo }: DictaphoneProps) => {
   const [isMobile, setIsMobile] = useState(false);
   const [permissionError, setPermissionError] = useState<string>('');
-  const [lastCommandTime, setLastCommandTime] = useState<number>(0);
-
-  const handleCommand = useCallback((direction: 'siguiente' | 'anterior') => {
-    const now = Date.now();
-    // Solo ejecutar el comando si han pasado al menos 1 segundo desde el último
-    if (now - lastCommandTime > 1000) {
-      console.log('Ejecutando comando:', direction);
-      onCambiarVersiculo(direction);
-      setLastCommandTime(now);
-    } else {
-      console.log('Comando ignorado - demasiado rápido');
-    }
-  }, [lastCommandTime, onCambiarVersiculo]);
+  const [isProcessingCommand, setIsProcessingCommand] = useState(false);
 
   const commands = [
     {
       command: ['siguiente', 'próximo', 'avanzar'],
-      callback: () => handleCommand('siguiente'),
-      matchInterim: true
+      callback: () => {
+        if (!isProcessingCommand) {
+          setIsProcessingCommand(true);
+          console.log('Ejecutando comando: siguiente');
+          onCambiarVersiculo('siguiente');
+          // Resetear el estado después de un breve retraso
+          setTimeout(() => {
+            setIsProcessingCommand(false);
+          }, 1000);
+        }
+      },
+      matchInterim: false
     },
     {
       command: ['anterior', 'atrás', 'retroceder'],
-      callback: () => handleCommand('anterior'),
-      matchInterim: true
+      callback: () => {
+        if (!isProcessingCommand) {
+          setIsProcessingCommand(true);
+          console.log('Ejecutando comando: anterior');
+          onCambiarVersiculo('anterior');
+          // Resetear el estado después de un breve retraso
+          setTimeout(() => {
+            setIsProcessingCommand(false);
+          }, 1000);
+        }
+      },
+      matchInterim: false
     }
   ];
 
