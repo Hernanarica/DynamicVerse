@@ -1,5 +1,5 @@
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface DictaphoneProps {
   onCambiarVersiculo: (direccion: 'siguiente' | 'anterior') => void;
@@ -8,22 +8,29 @@ interface DictaphoneProps {
 const Dictaphone = ({ onCambiarVersiculo }: DictaphoneProps) => {
   const [isMobile, setIsMobile] = useState(false);
   const [permissionError, setPermissionError] = useState<string>('');
+  const [lastCommandTime, setLastCommandTime] = useState<number>(0);
+
+  const handleCommand = useCallback((direction: 'siguiente' | 'anterior') => {
+    const now = Date.now();
+    // Solo ejecutar el comando si han pasado al menos 1 segundo desde el último
+    if (now - lastCommandTime > 1000) {
+      console.log('Ejecutando comando:', direction);
+      onCambiarVersiculo(direction);
+      setLastCommandTime(now);
+    } else {
+      console.log('Comando ignorado - demasiado rápido');
+    }
+  }, [lastCommandTime, onCambiarVersiculo]);
 
   const commands = [
     {
       command: ['siguiente', 'próximo', 'avanzar'],
-      callback: (command: string) => {
-        console.log('Comando reconocido:', command);
-        onCambiarVersiculo('siguiente');
-      },
+      callback: () => handleCommand('siguiente'),
       matchInterim: true
     },
     {
       command: ['anterior', 'atrás', 'retroceder'],
-      callback: (command: string) => {
-        console.log('Comando reconocido:', command);
-        onCambiarVersiculo('anterior');
-      },
+      callback: () => handleCommand('anterior'),
       matchInterim: true
     }
   ];
@@ -67,7 +74,18 @@ const Dictaphone = ({ onCambiarVersiculo }: DictaphoneProps) => {
 
   const stopListening = () => {
     console.log('Deteniendo reconocimiento de voz...');
-    SpeechRecognition.stopListening();
+    try {
+      SpeechRecognition.stopListening();
+      // Forzar la detención después de un breve retraso si aún está escuchando
+      setTimeout(() => {
+        if (listening) {
+          console.log('Forzando detención del reconocimiento...');
+          SpeechRecognition.abortListening();
+        }
+      }, 500);
+    } catch (error) {
+      console.error('Error al detener el reconocimiento:', error);
+    }
   };
 
   if (!browserSupportsSpeechRecognition) {
